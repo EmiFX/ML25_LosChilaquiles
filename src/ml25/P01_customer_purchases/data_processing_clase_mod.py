@@ -17,6 +17,8 @@ DATA_COLLECTED_AT = datetime(2025, 9, 21).date()
 CURRENT_FILE = Path(__file__).resolve()
 DATA_DIR = CURRENT_FILE / "../../datasets/customer_purchases/"
 
+def clean_text_column(x):
+    return x.fillna("").astype(str)
 
 def read_csv(filename: str):
     file = os.path.join(DATA_DIR, f"{filename}.csv")
@@ -60,34 +62,39 @@ def extract_customer_features(df):
 
     # -------- Tratamientos de fechas --------#
     age = (today - train_df["customer_date_of_birth"]) // 365
-    train_df["age"] = age.astype(int)
-    customer_ages = group["age"].first()
+    train_df["customer_age_years"] = age.astype(int)
+    customer_ages = group["customer_age_years"].first()
 
     tenure = ((today - train_df["customer_signup_date"]) // 365).astype(int)
-    train_df["tenure"] = tenure.astype(int)
-    customer_tenure = group["tenure"].first()
+    train_df["customer_tenure_year"] = tenure.astype(int)
+    customer_tenure = group["customer_tenure_year"].first()
 
     # ------------ Features agregados ---------#
-    customer_price_stats = ["item_price"].agg(["mean", "std"])
+    customer_price_stats =group["item_price"].agg(["mean", "std"])
     customer_price_stats.rename(
         columns={"mean": "avg_item_price", "std": "std_item_price"}, inplace=True
     )
     most_purchased_category = group["item_category"].agg(lambda x: x.mode()[0])
-    most_purchased_category.columns = ["customer_id", "most_purchased_category"]
+    most_purchased_category.name = "customer_prefered_cat"
+
+    # --------- Features adicionales ---------#
+    num_purchases = group.size()
+    category_diversity = group["item_category"].nunique()
+    avg_rating = group["item_avg_rating"].mean()
 
     # --------- Creando el dataframe ---------#
-    customer_feat = pd.concat(
-        {
-            "cusomer_id": group["customer_id"].first(),
-            "customer_age_years": customer_ages,
-            "customer_tenure_years": customer_tenure,
-            "customer_prefered_cat": most_purchased_category,
-        }
-    ).reset_index(drop=True)
+    customer_feat = pd.DataFrame({
+        "customer_id": group["customer_id"].first(),
+        "customer_age_years": customer_ages,
+        "customer_tenure_years": customer_tenure,
+        "customer_prefered_cat": most_purchased_category,
+        "num_purchases": num_purchases,
+        "category_diversity": category_diversity,
+        "avg_rating": avg_rating
+    }).reset_index(drop=True)
 
     save_df(customer_feat, "customer_features.csv")
     return customer_feat
-
 
 def build_processor(
     df, hierarchical_features, categorical_features, free_text_features, training=True
@@ -109,14 +116,16 @@ def build_processor(
     """
     savepath = Path(DATA_DIR) / "preprocessor.pkl"
     if training:
-        numeric_transformer = ...
-        categorical_transformer = ...
+        numeric_transformer = StandardScaler()
+        categorical_transformer = OneHotEncoder(handle_unknown="ignore")
         free_text_transformers = []
+        from sklearn.pipeline import make_pipeline
+        from sklearn.preprocessing import FunctionTransformer
         for col in free_text_features:
             free_text_transformers.append(
                 (
                     col,
-                    ...,  # como quieren procesar esta columna?
+                    CountVectorizer(),
                     col,
                 )
             )
@@ -132,55 +141,88 @@ def build_processor(
         df = df.drop(columns=["purchase_id", "label"])  # Not available in test
         processed_array = preprocessor.fit_transform(df)
         joblib.dump(preprocessor, savepath)
+
+        # Numeric
+        num_cols = hierarchical_features
+
+        # Categorical
+        cat_cols = preprocessor.named_transformers_["cat"].get_feature_names_out(
+            categorical_features
+        )
+
+        # Free-text
+        bow_cols = []
+        for col in free_text_features:
+            vectorizer = preprocessor.named_transformers_[col]
+            bow_cols.extend([f"{col}_bow_{t}" for t in vectorizer.get_feature_names_out()])
+
+        # Passthrough
+        other_cols = [
+            c
+            for c in df.columns
+            if c not in hierarchical_features + categorical_features + free_text_features
+            and c != "purchase_id"
+        ]
+
+        final_cols = list(num_cols) + list(cat_cols) + bow_cols + other_cols
+
+        processed_df = pd.DataFrame(processed_array, columns=final_cols)
+        return processed_df
     else:
         preprocessor = joblib.load(savepath)
         processed_array = preprocessor.transform(df)
-
-    # Numeric
-    num_cols = hierarchical_features
-
-    # Categorical
-    cat_cols = preprocessor.named_transformers_["cat"].get_feature_names_out(
-        categorical_features
-    )
-
-    # Free-text
-    bow_cols = []
-    for col in free_text_features:
-        vectorizer = preprocessor.named_transformers_[col]
-        bow_cols.extend([f"{col}_bow_{t}" for t in vectorizer.get_feature_names_out()])
-
-    # Passthrough
-    other_cols = [
-        c
-        for c in df.columns
-        if c not in hierarchical_features + categorical_features + free_text_features
-        and c != "purchase_id"
-    ]
-
-    final_cols = list(num_cols) + list(cat_cols) + bow_cols + other_cols
-
-    processed_df = pd.DataFrame(processed_array, columns=final_cols)
-    return processed_df
+        processed_df = pd.DataFrame(processed_array)
+        return processed_df
 
 
 def preprocess(raw_df, training=False):
     """
     Agrega tu procesamiento de datos, considera si necesitas guardar valores de entrenamiento.
     Utiliza la bandera para distinguir entre preprocesamiento de entrenamiento y validación/prueba
-    """
+        """
     dropcols = [
         "purchase_id",
+        "customer_id",
+        "item_id",
+        "customer_date_of_birth",
+        "customer_signup_date",
+        "item_release_date",
+        "item_img_filename",
+        "purchase_timestamp",
+        "purchase_device",
+        "purchase_item_rating",
+        "item_avg_rating",
+        "item_num_ratings",
+        "label",
+        "customer_prefered_cat",
+        
     ]
+
+    cols = [
+        "customer_gender",
+        "customer_age_years",
+        "customer_tenure_years",
+        "item_title",
+        "item_category",
+        "item_price",
+        "customer_item_views",
+    ]
+
 
     # Hierarchical
     hierarchical_features = []
 
+    # Normalization
+    numerical_features = ["item_price"]
+
     # One hot
-    categorical_features = []
+    raw_df["item_is_prefered"] = (  
+        raw_df["item_category"] == raw_df["customer_prefered_cat"]
+    )
+    categorical_features = ["customer_gender", "item_is_prefered"]
 
     # Texto
-    free_text_features = []
+    free_text_features = ["item_title", ]
 
     # Datetime
     datetimecols = []
@@ -199,7 +241,7 @@ def preprocess(raw_df, training=False):
     )
 
     # Borrar columnas que no sirvan
-    processed_df = processed_df.drop(columns=dropcols)
+    processed_df = processed_df.drop(columns=dropcols, errors="ignore")
     return processed_df
 
 
@@ -215,25 +257,27 @@ def read_train_data():
     # Agregar Features del cliente
     train_df_cust = pd.merge(train_df, customer_feat, on="customer_id", how="left")
 
+    # Save item_id and customer_id before preprocessing
+    id_cols = train_df_cust[["item_id", "customer_id"]]
     processed_pos = preprocess(train_df_cust, training=True)
+    # Add back id columns
+    processed_pos = pd.concat([processed_pos, id_cols.reset_index(drop=True)], axis=1)
     processed_pos["label"] = 1
 
     # Obtener todas las columnas
     all_columns = processed_pos.columns
 
-    # Separar los features exclusivos de los items
+    # Separar los features exclusivos de los items (including item_id, but only once)
     item_feat = [col for col in all_columns if "item" in col]
-    unique_items = processed_pos[item_feat].drop_duplicates(
-        subset=[
-            "item_id",
-        ]
-    )
+    if "item_id" not in item_feat:
+        item_feat.append("item_id")
+    unique_items = processed_pos[item_feat].drop_duplicates(subset=["item_id"])
 
-    # Separar los features exclusivos de los clientes
+    # Separar los features exclusivos de los clientes (including customer_id, but only once)
     customer_feat = [col for col in all_columns if "customer" in col]
-    unique_customers = processed_pos[customer_feat].drop_duplicates(
-        subset=["customer_id"]
-    )
+    if "customer_id" not in customer_feat:
+        customer_feat.append("customer_id")
+    unique_customers = processed_pos[customer_feat].drop_duplicates(subset=["customer_id"])
 
     # Agregar los features de los items a los negativos
     processed_neg = pd.merge(
@@ -269,14 +313,13 @@ def read_train_data():
     y = shuffled["label"]
 
     # Eliminar columnas que no sirven
-    X = shuffled.drop(columns=["label", "customer_id", "item_id"])
+    X = shuffled.drop(columns=["label", "customer_id", "item_id"], errors="ignore")
     return X, y
 
 
 def read_test_data():
     test_df = read_csv("customer_purchases_test")
-    customer_feat = read_csv("customer_feat.csv")
-    test_df = pd.merge(test_df, customer_feat, on="customer_id")
+    customer_feat = read_csv("customer_features")
 
     # agregar features derivados del cliente al dataset
     merged = pd.merge(test_df, customer_feat, on="customer_id", how="left")
@@ -292,7 +335,9 @@ def read_test_data():
 
 
 if __name__ == "__main__":
-    train_df = read_train_data()
-    print(train_df.info())
+    X, y = read_train_data()
+    print(X.info())
     test_df = read_csv("customer_purchases_test")
     print(test_df.columns)
+
+    test_processed = read_test_data()
