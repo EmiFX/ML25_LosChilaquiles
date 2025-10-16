@@ -119,8 +119,6 @@ def build_processor(
         numeric_transformer = StandardScaler()
         categorical_transformer = OneHotEncoder(handle_unknown="ignore")
         free_text_transformers = []
-        from sklearn.pipeline import make_pipeline
-        from sklearn.preprocessing import FunctionTransformer
         for col in free_text_features:
             free_text_transformers.append(
                 (
