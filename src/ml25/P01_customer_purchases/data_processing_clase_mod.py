@@ -72,7 +72,7 @@ def extract_customer_features(df):
     # ------------ Features agregados ---------#
     customer_price_stats =group["item_price"].agg(["mean", "std"])
     customer_price_stats.rename(
-        columns={"mean": "avg_item_price", "std": "std_item_price"}, inplace=True
+        columns={"mean": "item_avg_price", "std": "item_std_price"}, inplace=True
     )
     most_purchased_category = group["item_category"].agg(lambda x: x.mode()[0])
     most_purchased_category.name = "customer_prefered_cat"
@@ -97,14 +97,14 @@ def extract_customer_features(df):
     return customer_feat
 
 def build_processor(
-    df, hierarchical_features, categorical_features, free_text_features, training=True
+    df, numerical_features, categorical_features, free_text_features, training=True
 ):
     """
     Fits or loads a ColumnTransformer preprocessor and returns a processed DataFrame.
 
     Parameters:
     - df: input DataFrame
-    - hierarchical_features: list of numeric columns to scale
+    - numerical_features: list of numeric columns to scale
     - categorical_features: list of categorical columns to one-hot encode
     - training: if True, fit and save preprocessor; if False, load preprocessor
     - data_dir: directory to save/load preprocessor
@@ -118,6 +118,8 @@ def build_processor(
     if training:
         numeric_transformer = StandardScaler()
         categorical_transformer = OneHotEncoder(handle_unknown="ignore")
+        numeric_transformer = StandardScaler()
+        categorical_transformer = OneHotEncoder(handle_unknown="ignore")
         free_text_transformers = []
         for col in free_text_features:
             free_text_transformers.append(
@@ -129,14 +131,13 @@ def build_processor(
             )
         preprocessor = ColumnTransformer(
             transformers=[
-                ("num", numeric_transformer, hierarchical_features),
+                ("num", numeric_transformer, numerical_features),
                 ("cat", categorical_transformer, categorical_features),
                 *free_text_transformers,
             ],
             remainder="passthrough",  # Mantener las demas sin tocar
         )
-
-        df = df.drop(columns=["purchase_id", "label"])  # Not available in test
+        df = df.drop(columns=["label"], errors="ignore")
         processed_array = preprocessor.fit_transform(df)
         joblib.dump(preprocessor, savepath)
 
@@ -232,7 +233,7 @@ def preprocess(raw_df, training=False):
     # ColumnTransformer
     processed_df = build_processor(
         raw_df,
-        hierarchical_features,
+        numerical_feat,
         categorical_features,
         free_text_features,
         training=training,
@@ -303,11 +304,8 @@ def read_train_data():
         .reset_index(drop=True)
     )
 
-    # Randomizar los datos (shuffle de las filas)
-    shuffled = processed_full.sample(frac=1)
-
     # Transformar a tipo numero
-    shuffled = df_to_numeric(shuffled)
+    shuffled = df_to_numeric(processed_full)
     y = shuffled["label"]
 
     # Eliminar columnas que no sirven
@@ -317,6 +315,7 @@ def read_train_data():
 
 def read_test_data():
     test_df = read_csv("customer_purchases_test")
+    customer_feat = read_csv("customer_features")
     customer_feat = read_csv("customer_features")
 
     # agregar features derivados del cliente al dataset
@@ -336,6 +335,8 @@ if __name__ == "__main__":
     X, y = read_train_data()
     print(X.info())
     test_df = read_csv("customer_purchases_test")
+
+    X_test = read_test_data()
     print(test_df.columns)
 
     test_processed = read_test_data()
