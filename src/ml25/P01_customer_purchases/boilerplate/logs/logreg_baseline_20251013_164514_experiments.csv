@@ -1,0 +1,2 @@
+model,params,val_acc,val_f1,val_auc
+logreg_baseline,"{'estimator': 'LogisticRegression', 'C': 1.0, 'class_weight': None, 'max_iter': 1000, 'solver': 'liblinear', 'random_state': 42}",1.0,1.0,1.0
