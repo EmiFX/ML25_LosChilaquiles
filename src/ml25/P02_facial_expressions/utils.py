@@ -9,7 +9,6 @@ import torchvision
 
 file_path = pathlib.Path(__file__).parent.absolute()
 
-
 def get_transforms(split, img_size):
     # El dataset consiste en imagenes en escala de grises
     # con valores entre 0 y 255
