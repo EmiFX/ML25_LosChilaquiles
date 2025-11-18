@@ -20,7 +20,7 @@ this_file_dir = Path(__file__).parent
 # Modificar a donde tengan sus datos
 # DATA_DIR = this_file_dir / "data"
 
-DATA_DIR = this_file_dir / ".." / "datasets" / "house_prices"
+DATA_DIR = this_file_dir / "datasets" / "house_prices"
 
 
 def read_data(file):
