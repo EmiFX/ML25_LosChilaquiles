@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import glob
 import cv2
 from ml25.P02_facial_expressions.network import Network
 import torch
@@ -60,5 +61,7 @@ def predict(img_title_paths):
 
 if __name__ == "__main__":
     # Direcciones relativas a este archivo
-    img_paths = ["./test_imgs/happy.png"]
+    img_paths = glob.glob("./test_imgs/*.jpg")
+    img_paths += glob.glob("./test_imgs/*.png")
+    img_paths += glob.glob("./test_imgs/*.jpeg")
     predict(img_paths)
