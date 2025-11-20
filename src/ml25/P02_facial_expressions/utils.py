@@ -79,7 +79,7 @@ def to_torch(array: np.ndarray, roll_dims=True):
     return tensor
 
 
-def to_numpy(tensor: torch.tensor, roll_dims=True):
+def to_numpy(tensor: torch.Tensor, roll_dims=True):
     """
     Convert tensor to numpy array
     args:

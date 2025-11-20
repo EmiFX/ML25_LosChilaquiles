@@ -43,7 +43,7 @@ def get_loader(split, batch_size, shuffle=True, num_workers=0):
         - batch_size (int): batch size
         - split (str): split to load (train, test or val)
     """
-    dataset = FER2013(root=file_path, split=split)
+    dataset = FER2013(root=str(file_path), split=split)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -76,7 +76,7 @@ class FER2013(Dataset):
         self.img_size = 48
         self.target_transform = target_transform
         self.split = split
-        self.root = root
+        self.root = pathlib.Path(root)
         self.unnormalize = None
         self.transform, self.unnormalize = get_transforms(
             split=self.split, img_size=self.img_size
@@ -128,7 +128,7 @@ class FER2013(Dataset):
             image = torch.from_numpy(sample_image)  # uint8
 
         # Pre procesamiento de la etiqueta
-        target = self._labels[idx]
+        target = int(self._labels[idx])
         emotion = EMOTIONS_MAP[target]
         if self.target_transform is not None:
             target = self.target_transform(target)
