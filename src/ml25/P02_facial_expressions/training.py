@@ -16,7 +16,6 @@ from ml25.P02_facial_expressions.network import Network
 import wandb
 from datetime import datetime, timezone
 
-
 def init_wandb(cfg):
     # Initialize wandb
     now_utc = datetime.now(timezone.utc)
@@ -42,20 +41,21 @@ def validation_step(val_loader, net, cost_function):
     - val_loss (float): el costo total (promedio por minibatch) de todos los datos de validación
     """
     val_loss = 0.0
+    device = net.device
     for i, batch in enumerate(val_loader, 0):
-        batch_imgs = batch["transformed"]
-        batch_labels = batch["label"]
+        batch_imgs = batch["transformed"].to(device)
+        batch_labels = batch["label"].to(device)
         device = net.device
-        batch_imgs = batch_imgs.to(device)
         batch_labels = batch_labels.to(device)
         with torch.inference_mode():
             # TODO: realiza un forward pass, calcula el loss y acumula el costo
             logits, proba = net(batch_imgs)
             loss = cost_function(logits, batch_labels)
             val_loss += loss.item()
-        
+            
     # TODO: Regresa el costo promedio por minibatch
-    return val_loss / len(val_loader)
+    return val_loss/len(val_loader)
+
 
 def train():
     # Hyperparametros
@@ -68,10 +68,10 @@ def train():
     }
     run = init_wandb(cfg)
 
-    train_cfg = cfg.get("training", {})  # Proporcionar dict vacío como default
-    learning_rate = train_cfg.get("learning_rate", 1e-4)  # Default value
-    n_epochs = train_cfg.get("n_epochs", 50)  # Default value
-    batch_size = train_cfg.get("batch_size", 256)  # Default value
+    train_cfg = cfg.get("training", {})
+    learning_rate = train_cfg.get("learning_rate", 1e-4)
+    n_epochs = train_cfg.get("n_epochs", 100)
+    batch_size = train_cfg.get("batch_size", 256)
 
     # Train, validation, test loaders
     train_dataset, train_loader = get_loader(
@@ -92,14 +92,12 @@ def train():
     optimizer = optim.Adam(modelo.parameters(), lr=learning_rate)
 
     best_epoch_loss = np.inf
+    device = modelo.device
     for epoch in range(n_epochs):
-        train_loss = 0.0  # Especificar tipo float
+        train_loss = 0
         for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch}")):
-            batch_imgs = batch["transformed"]
-            batch_labels = batch["label"]
-            batch_imgs = batch_imgs.to(modelo.device)
-            batch_labels = batch_labels.to(modelo.device)
-            
+            batch_imgs = batch["transformed"].to(device)
+            batch_labels = batch["label"].to(device)
             # TODO Zero grad, forward pass, backward pass, optimizer step
             optimizer.zero_grad()
             logits, proba = modelo(batch_imgs)
@@ -122,7 +120,8 @@ def train():
             best_epoch_loss = val_loss
             modelo.save_model("best_model.pth")
             tqdm.write(f"Modelo guardado en epoch {epoch} con val_loss: {val_loss:.2f}")
-            
+
+
         run.log(
             {
                 "epoch": epoch,
@@ -130,6 +129,7 @@ def train():
                 "val/loss": val_loss,
             }
         )
+
 
 if __name__ == "__main__":
     train()
