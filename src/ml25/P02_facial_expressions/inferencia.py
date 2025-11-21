@@ -52,12 +52,13 @@ def predict(img_title_paths):
         logits, proba = modelo.predict(transformed)
         pred = torch.argmax(proba, -1).item()
         pred_label = EMOTIONS_MAP[pred]
+        confidence = proba[0, pred].item() * 100
 
         # Original / transformada
         h, w = original.shape[:2]
         resize_value = 300
         img = cv2.resize(original, (w * resize_value // h, resize_value))
-        img = add_img_text(img, f"Pred: {pred_label}")
+        img = add_img_text(img, f"Pred: {pred_label} ({confidence:.1f}%)")
 
         # Mostrar la imagen
         denormalized = to_numpy(denormalized)
