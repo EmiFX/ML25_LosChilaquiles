@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import cv2
+import time
 import torch.optim as optim
 import torch
 import torch.nn as nn
@@ -24,7 +25,7 @@ def init_wandb(cfg):
     run = wandb.init(
         project="facial_expressions_cnn",
         config=cfg,
-        name=f"facial_expressions_cnn_{timestamp}_utc",
+        name=f"facial_expressions_cnn_resnet50_{timestamp}_utc",
     )
     return run
 
@@ -63,15 +64,17 @@ def train():
         "training": {
             "learning_rate": 1e-4,
             "n_epochs": 50,
-            "batch_size": 256,
+            "batch_size": 64,
+            "weight_decay": 1e-4,
         },
     }
     run = init_wandb(cfg)
 
     train_cfg = cfg.get("training", {})
     learning_rate = train_cfg.get("learning_rate", 1e-4)
-    n_epochs = train_cfg.get("n_epochs", 100)
-    batch_size = train_cfg.get("batch_size", 256)
+    n_epochs = train_cfg.get("n_epochs", 50)
+    batch_size = train_cfg.get("batch_size", 64)
+    weight_decay = train_cfg.get("weight_decay", 1e-4)
 
     # Train, validation, test loaders
     train_dataset, train_loader = get_loader(
@@ -89,10 +92,16 @@ def train():
     criterion = nn.CrossEntropyLoss()
 
     # Define el optimizador
-    optimizer = optim.Adam(modelo.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(modelo.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     best_epoch_loss = np.inf
     device = modelo.device
+
+    print(f"Inicio de entrenamiento: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if torch.cuda.is_available():
+        print("Usando", torch.cuda.get_device_name(0))
+    start_time = time.time()
+
     for epoch in range(n_epochs):
         train_loss = 0
         for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch}")):
@@ -118,7 +127,7 @@ def train():
         # TODO guarda el modelo si el costo de validación es menor al mejor costo de validación
         if val_loss < best_epoch_loss:
             best_epoch_loss = val_loss
-            modelo.save_model("best_model.pth")
+            modelo.save_model("best_model_resnet50.pth")
             tqdm.write(f"Modelo guardado en epoch {epoch} con val_loss: {val_loss:.2f}")
 
 
@@ -129,6 +138,10 @@ def train():
                 "val/loss": val_loss,
             }
         )
+    total_time = time.time() - start_time
+    print(f"Fin de entrenamiento: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Tiempo total: {total_time/60:.2f} minutos ({total_time:.2f}s)")
+    print(f"Mejor val_loss: {best_epoch_loss:.4f}")
 
 
 if __name__ == "__main__":

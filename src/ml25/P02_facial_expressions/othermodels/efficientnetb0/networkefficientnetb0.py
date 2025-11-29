@@ -4,17 +4,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import pathlib
-from torchvision.models import resnet18, ResNet18_Weights
+from torchvision.models import efficientnet_b0, EfficientNet_B0_Weights
 
 file_path = pathlib.Path(__file__).parent.absolute()
 
-#modelo preentrenado, resnet18
-def build_backbone(model="resnet18", weights="imagenet", freeze=True, last_n_layers=2):
-    if model == "resnet18":
+#modelo preentrenado, efficientnet_b0
+def build_backbone(model="efficientnet_b0", weights="imagenet", freeze=True, last_n_layers=2):
+    if model == "efficientnet_b0":
         if weights == "imagenet":
-            backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            backbone = efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
         else:
-            backbone = resnet18(weights=None)
+            backbone = efficientnet_b0(weights=None)
 
         if freeze:
             for param in backbone.parameters():

@@ -4,17 +4,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import pathlib
-from torchvision.models import resnet18, ResNet18_Weights
+from torchvision.models import resnet50, ResNet50_Weights
 
 file_path = pathlib.Path(__file__).parent.absolute()
 
-#modelo preentrenado, resnet18
-def build_backbone(model="resnet18", weights="imagenet", freeze=True, last_n_layers=2):
-    if model == "resnet18":
+#modelo preentrenado, resnet50
+def build_backbone(model="resnet50", weights="imagenet", freeze=True, last_n_layers=2):
+    if model == "resnet50":
         if weights == "imagenet":
-            backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1)
+            backbone = resnet50(weights=ResNet50_Weights.IMAGENET1K_V1)
         else:
-            backbone = resnet18(weights=None)
+            backbone = resnet50(weights=None)
 
         if freeze:
             for param in backbone.parameters():
@@ -29,18 +29,21 @@ class Network(nn.Module):
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
+        self.backbone = build_backbone(model="resnet50", weights="imagenet", freeze=True, last_n_layers=2)
+
+        backbone_out_features = 2048 #resnet50 tiene 2048 features de salida
+        self.backbone.fc = nn.Identity() #para borrar la ultima capa de resnet
+
         # TODO: Calcular dimension de salida
-        out_dim = self.calc_out_dim(input_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
-        out_dim = self.calc_out_dim(out_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
         
         # TODO: Define las capas de tu red
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * out_dim * out_dim, 128)
-        self.fc2 = nn.Linear(128, n_classes)
+        self.fc1 = nn.Linear(backbone_out_features, 512)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.dropout1 = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(512, 256)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.dropout2 = nn.Dropout(0.3)
+        self.fc3 = nn.Linear(256, n_classes)
         
         self.to(self.device)
     
@@ -49,11 +52,21 @@ class Network(nn.Module):
         return out_dim
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        
+        # escala a rgb x si es necesario
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        
         # TODO: Define la propagacion hacia adelante de tu red
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
+        x = self.backbone(x) #batch, 2048
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.dropout1(x)
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = F.relu(x)
+        x = self.dropout2(x)
+
         logits = self.fc2(x)
         proba = F.softmax(logits, dim=1)
         return logits, proba
