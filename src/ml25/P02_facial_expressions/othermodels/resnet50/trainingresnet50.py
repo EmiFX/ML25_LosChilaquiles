@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 from ml25.P02_facial_expressions.dataset import get_loader
-from ml25.P02_facial_expressions.network import Network
+from ml25.P02_facial_expressions.othermodels.resnet50.networkresnet50 import Network
 
 # Logging
 import wandb
