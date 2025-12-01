@@ -226,4 +226,3 @@ uv.lock
 wandb/
 *desktop.ini
 **/models_carracing/
-inferencia3modelos.py
