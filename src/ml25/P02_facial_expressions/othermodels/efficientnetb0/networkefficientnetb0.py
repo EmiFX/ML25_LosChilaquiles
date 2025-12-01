@@ -19,28 +19,38 @@ def build_backbone(model="efficientnet_b0", weights="imagenet", freeze=True, las
         if freeze:
             for param in backbone.parameters():
                 param.requires_grad = False
+        
+            # Descongelar últimos bloques de EfficientNet
+            # EfficientNet tiene 8 bloques (features[0] a features[8])
+            if last_n_layers >= 1:
+                for param in backbone.features[-1].parameters():
+                    param.requires_grad = True
+            if last_n_layers >= 2:
+                for param in backbone.features[-2].parameters():
+                    param.requires_grad = True
+            if last_n_layers >= 3:
+                for param in backbone.features[-3].parameters():
+                    param.requires_grad = True               
         return backbone
     else:
         raise Exception(f"Model {model} not supported")
-
 
 class Network(nn.Module):
     def __init__(self, input_dim: int, n_classes: int) -> None:
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        self.backbone = build_backbone(model="efficientnet_b0", weights="imagenet", freeze=True, last_n_layers=2)
         
         # TODO: Calcular dimension de salida
-        out_dim = self.calc_out_dim(input_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
-        out_dim = self.calc_out_dim(out_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
-        
+        backbone_out_features = 1280  # EfficientNet-B0 tiene 1280 features de salida
+        self.backbone.classifier = nn.Identity()  # para borrar la ultima capa de efficientnet
+
         # TODO: Define las capas de tu red
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * out_dim * out_dim, 128)
-        self.fc2 = nn.Linear(128, n_classes)
+        self.fc1 = nn.Linear(backbone_out_features, 512)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.dropout1 = nn.Dropout(0.4)
+        self.fc2 = nn.Linear(512, n_classes)
         
         self.to(self.device)
     
@@ -50,10 +60,18 @@ class Network(nn.Module):
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # TODO: Define la propagacion hacia adelante de tu red
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
+        # escala a rgb x si es necesario
+        if x.shape[1] == 1:
+            x = x.repeat(1, 3, 1, 1)
+        
+        # Extraer features con EfficientNet-B0
+        x = self.backbone(x)  # (batch_size, 1280)
+        
+        x = self.fc1(x)  # 1280 -> 512
+        x = self.bn1(x)
+        x = F.relu(x)
+        x = self.dropout1(x)
+        
         logits = self.fc2(x)
         proba = F.softmax(logits, dim=1)
         return logits, proba

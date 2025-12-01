@@ -52,22 +52,24 @@ class Network(nn.Module):
         return out_dim
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        
         # escala a rgb x si es necesario
         if x.shape[1] == 1:
             x = x.repeat(1, 3, 1, 1)
         
         # TODO: Define la propagacion hacia adelante de tu red
         x = self.backbone(x) #batch, 2048
-        x = self.fc1(x)
+        
+        x = self.fc1(x) #2048, 512
+        x = self.bn1(x)
         x = F.relu(x)
         x = self.dropout1(x)
+        
         x = self.fc2(x)
         x = self.bn2(x)
         x = F.relu(x)
         x = self.dropout2(x)
 
-        logits = self.fc2(x)
+        logits = self.fc3(x)
         proba = F.softmax(logits, dim=1)
         return logits, proba
     
