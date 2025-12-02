@@ -36,7 +36,7 @@ file_path = pathlib.Path(__file__).parent.absolute()
 
 print(file_path)
 
-def get_loader(split, batch_size, shuffle=True, num_workers=0):
+def get_loader(split, batch_size, shuffle=True, num_workers=6):
     """
     Get train and validation loaders
     args:

@@ -4,7 +4,6 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import cv2
 import time
 import torch.optim as optim
 import torch
@@ -104,7 +103,7 @@ def train():
 
     for epoch in range(n_epochs):
         train_loss = 0
-        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch}")):
+        for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch + 1}")):
             batch_imgs = batch["transformed"].to(device)
             batch_labels = batch["label"].to(device)
             # TODO Zero grad, forward pass, backward pass, optimizer step
