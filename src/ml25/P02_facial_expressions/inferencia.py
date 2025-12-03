@@ -68,6 +68,12 @@ def predict(img_title_paths):
             pred_label = EMOTIONS_MAP[pred]
             confidence = proba[0, pred].item() * 100
 
+            print(f"Predicción: {pred_label} ({confidence:.1f}%)")
+            print(f"Accuracy por emoción:")
+            for emo_idx, emo_name in EMOTIONS_MAP.items():
+                acc = proba[0, emo_idx].item() * 100
+                print(f"      {emo_name}: {acc:.2f}%")
+
             # Original / transformada
             h, w = original.shape[:2]
             resize_value = 300
@@ -89,7 +95,7 @@ def predict(img_title_paths):
 
 if __name__ == "__main__":
     # Directorio de test images
-    test_dir = file_path / "test_imgs"
+    test_dir = file_path / "test_img_per"
     
     if not test_dir.exists():
         print(f"El directorio {test_dir} no existe")

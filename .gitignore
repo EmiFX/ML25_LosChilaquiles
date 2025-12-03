@@ -216,6 +216,7 @@ __marimo__/
 *.pth
 *.pt
 *.pkl
+test_img_per
 
 **/data
 **/data_batch_*
