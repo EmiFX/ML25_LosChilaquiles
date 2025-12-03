@@ -211,13 +211,12 @@ __marimo__/
 #
 /.vscode
 *.pth
-*/models/*.pt
 .vscode
 .csv
 *.pth
 *.pt
 *.pkl
-**/models
+
 **/data
 **/data_batch_*
 *.tar.gz
