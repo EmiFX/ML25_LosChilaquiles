@@ -41,7 +41,6 @@ class Network(nn.Module):
         
         # TODO: Define las capas de tu red
         self.fc1 = nn.Linear(backbone_out_features, 512)
-        self.bn1 = nn.BatchNorm1d(512)
         self.dropout1 = nn.Dropout(0.4)
         self.fc2 = nn.Linear(512, 256)
         self.bn2 = nn.BatchNorm1d(256)
@@ -63,7 +62,6 @@ class Network(nn.Module):
         x = self.backbone(x) #batch, 768
         
         x = self.fc1(x) #768, 512
-        x = self.bn1(x)
         x = F.relu(x)
         x = self.dropout1(x)
         

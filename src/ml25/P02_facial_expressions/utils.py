@@ -9,7 +9,60 @@ import torchvision
 
 file_path = pathlib.Path(__file__).parent.absolute()
 
-def get_transforms(split, img_size):
+def enhance_image(img: np.ndarray, method="clahe"):
+    """
+    Mejora la calidad de imágenes en escala de grises
+    
+    Args:
+        img (np.ndarray): Imagen uint8 (0-255)
+        method (str): 'clahe', 'full', o 'none'
+    
+    Returns:
+        np.ndarray: Imagen mejorada
+    """
+    if method == "none":
+        return img
+    
+    # Asegurar uint8
+    if img.dtype != np.uint8:
+        img = (img * 255).astype(np.uint8)
+    
+    if method == "clahe":
+        # Solo CLAHE (rápido y efectivo)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        return clahe.apply(img)
+    
+    elif method == "full":
+        # Pipeline completo (más lento pero mejor calidad)
+        # 1. CLAHE
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        enhanced = clahe.apply(img)
+        
+        # 2. Denoising
+        enhanced = cv2.fastNlMeansDenoising(enhanced, None, h=10)
+        
+        # 3. Sharpening suave
+        kernel = np.array([[-1,-1,-1], [-1, 9,-1], [-1,-1,-1]]) / 9
+        sharpened = cv2.filter2D(enhanced, -1, kernel)
+        
+        # Combinar
+        result = cv2.addWeighted(enhanced, 0.7, sharpened, 0.3, 0)
+        return result
+    
+    return img
+
+class EnhanceTransform:
+    """Transformación personalizada para mejorar imágenes"""
+    def __init__(self, method="clahe"):
+        self.method = method
+    
+    def __call__(self, img):
+        if isinstance(img, np.ndarray):
+            return enhance_image(img, method=self.method)
+        return img
+
+
+def get_transforms(split, img_size, enhance=True):
     # El dataset consiste en imagenes en escala de grises
     # con valores entre 0 y 255
     # de dimension 1 x 48 x 48
@@ -17,12 +70,17 @@ def get_transforms(split, img_size):
     # Agrega algún tipo de data agumentation para el conjunto de entrenamiento
     # https://pytorch.org/vision/stable/transforms.html
     common = [
-        torchvision.transforms.ToTensor(),
+        torchvision.transforms.ToPILImage(),
         torchvision.transforms.Grayscale(),
+        torchvision.transforms.ToTensor(),
         torchvision.transforms.Resize((img_size, img_size)),
     ]
 
     mean, std = 0.5, 0.5
+
+    if enhance:
+        base = [EnhanceTransform(method="clahe")] + common
+
     if split == "train":
         transforms = torchvision.transforms.Compose(
             [

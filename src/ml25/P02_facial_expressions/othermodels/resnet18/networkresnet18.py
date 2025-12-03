@@ -38,9 +38,7 @@ class Network(nn.Module):
         
         # TODO: Define las capas de tu red
         self.conv1 = nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1)
-        self.bn1 = nn.BatchNorm2d(256)
         self.conv2 = nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1)
-        self.bn2 = nn.BatchNorm2d(128)
         self.conv3 = nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1)
         self.bn3 = nn.BatchNorm2d(64)
         
@@ -78,8 +76,8 @@ class Network(nn.Module):
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # TODO: Define la propagacion hacia adelante de tu red
         x = self.backbone(x)
-        x = F.relu((self.bn1(self.conv1(x))))
-        x = F.relu((self.bn2(self.conv2(x))))
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
         x = F.relu((self.bn3(self.conv3(x))))
         x = self.global_avg_pool(x)
         x=x.view(x.size(0), -1)

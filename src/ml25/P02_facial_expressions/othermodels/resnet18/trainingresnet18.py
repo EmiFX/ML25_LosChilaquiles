@@ -9,12 +9,44 @@ import torch.optim as optim
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from ml25.P02_facial_expressions.dataset import get_loader
+from ml25.P02_facial_expressions.dataset import get_loader, EMOTIONS_MAP
 from ml25.P02_facial_expressions.othermodels.resnet18.networkresnet18 import Network
+from collections import Counter
 
 # Logging
 import wandb
 from datetime import datetime, timezone
+
+def calculate_class_weights(dataset):
+    """
+    Calcula pesos inversamente proporcionales a la frecuencia de cada clase
+    """
+    # Contar cuántas muestras hay de cada emoción
+    labels = [sample['label'] for sample in dataset]
+    class_counts = Counter(labels)
+    
+    # Total de muestras
+    total = len(labels)
+    
+    # Calcular peso: total / (n_classes * count_per_class)
+    n_classes = len(class_counts)
+    class_weights = {}
+    
+    for emotion_id, count in class_counts.items():
+        weight = total / (n_classes * count)
+        class_weights[emotion_id] = weight
+    
+    # Convertir a tensor ordenado [0, 1, 2, 3, 4, 5, 6]
+    weights_list = [class_weights[i] for i in range(n_classes)]
+    weights_tensor = torch.tensor(weights_list, dtype=torch.float32)
+    
+    print("\n📊 Distribución de clases:")
+    for emotion_id, count in sorted(class_counts.items()):
+        emotion_name = EMOTIONS_MAP[emotion_id]
+        weight = class_weights[emotion_id]
+        print(f"  {emotion_name}: {count} samples (weight: {weight:.3f})")
+    
+    return weights_tensor
 
 def init_wandb(cfg):
     # Initialize wandb
@@ -61,9 +93,9 @@ def train():
     # Hyperparametros
     cfg = {
         "training": {
-            "learning_rate": 1e-4,
+            "learning_rate": 5e-3,
             "n_epochs": 50,
-            "batch_size": 64,
+            "batch_size": 1024,
         },
     }
     run = init_wandb(cfg)
@@ -78,6 +110,7 @@ def train():
         "train", batch_size=batch_size, shuffle=True
     )
     val_dataset, val_loader = get_loader("val", batch_size=batch_size, shuffle=False)
+
     print(
         f"Cargando datasets --> entrenamiento: {len(train_dataset)}, validacion: {len(val_dataset)}"
     )
@@ -85,14 +118,18 @@ def train():
     # Instanciamos tu red
     modelo = Network(input_dim=48, n_classes=7)
 
+    class_weights = calculate_class_weights(train_dataset)
+    device = modelo.device
+    class_weights = class_weights.to(device)
+
     # TODO: Define la funcion de costo
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     # Define el optimizador
     optimizer = optim.Adam(modelo.parameters(), lr=learning_rate)
 
     best_epoch_loss = np.inf
-    device = modelo.device
+    #device = modelo.device
     for epoch in range(n_epochs):
         train_loss = 0
         for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch: {epoch}")):

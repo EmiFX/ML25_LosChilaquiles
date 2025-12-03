@@ -36,14 +36,14 @@ file_path = pathlib.Path(__file__).parent.absolute()
 
 print(file_path)
 
-def get_loader(split, batch_size, shuffle=True, num_workers=6):
+def get_loader(split, batch_size, shuffle=True, num_workers=6, enhance=True):
     """
     Get train and validation loaders
     args:
         - batch_size (int): batch size
         - split (str): split to load (train, test or val)
     """
-    dataset = FER2013(root=str(file_path), split=split)
+    dataset = FER2013(root=str(file_path), split=split,enhance=enhance)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -74,6 +74,7 @@ class FER2013(Dataset):
         root: str,
         split: str = "train",
         target_transform: Optional[Callable] = None,
+        enhance:bool = True,
     ) -> None:
         super().__init__()
         self.img_size = 48
@@ -82,7 +83,7 @@ class FER2013(Dataset):
         self.root = pathlib.Path(root)
         self.unnormalize = None
         self.transform, self.unnormalize = get_transforms(
-            split=self.split, img_size=self.img_size
+            split=self.split, img_size=self.img_size, enhance=enhance
         )
 
         df = self._read_data()
