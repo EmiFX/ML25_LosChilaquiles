@@ -61,7 +61,7 @@ def train():
     # Hyperparametros
     cfg = {
         "training": {
-            "learning_rate": 1e-4,
+            "learning_rate": 1e-3,
             "n_epochs": 50,
             "batch_size": 256,
         },
