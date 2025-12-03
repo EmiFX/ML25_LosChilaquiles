@@ -99,7 +99,7 @@ class FER2013(Dataset):
     def _read_data(self):
         base_folder = pathlib.Path(self.root) / "data"
 
-        _split = "train" if self.split == "train" or "val" else "test"
+        _split = "train" if self.split in ["train", "val"] else "test"
         file_name = f"{_split}.csv"
         data_file = base_folder / file_name
 

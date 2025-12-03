@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import os
 import cv2
-from ml25.P02_facial_expressions.othermodels.efficientnetb0.networkefficientnetb0 import Network
+from ml25.P02_facial_expressions.othermodels.resnet18.networkresnet18 import Network
 import torch
 from ml25.P02_facial_expressions.utils import (
     to_numpy,
@@ -21,7 +21,7 @@ def load_img(path):
     img = cv2.imread(path)
     if img is None:
         raise ValueError(f"No se pudo cargar la imagen: {path}")
-    val_transforms, unnormalize = get_transforms("test", img_size=48)
+    val_transforms, unnormalize = get_transforms("test_imgs", img_size=48)
     tensor_img = val_transforms(img)
     denormalized = unnormalize(tensor_img)
     return img, tensor_img, denormalized
@@ -35,7 +35,7 @@ def predict(img_title_paths):
     """
     # Cargar el modelo
     modelo = Network(48, 7)
-    model_path = file_path / "othermodels" / "efficientnetb0" / "models" / "best_model_efficientnetb0.pth"
+    model_path = file_path / "othermodels" / "resnet18" / "models" / "best_model.pth"
     if not model_path.exists():
         raise FileNotFoundError(f"Modelo no encontrado: {model_path}")
     modelo.load_model(str(model_path))

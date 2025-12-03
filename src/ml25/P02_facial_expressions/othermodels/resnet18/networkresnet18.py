@@ -28,19 +28,46 @@ class Network(nn.Module):
     def __init__(self, input_dim: int, n_classes: int) -> None:
         super().__init__()
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+        self.backbone = build_backbone(model="resnet18", weights="imagenet", freeze=True, last_n_layers=2)
+        self.backbone = nn.Sequential(*list(self.backbone.children())[:-2])
         # TODO: Calcular dimension de salida
-        out_dim = self.calc_out_dim(input_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
-        out_dim = self.calc_out_dim(out_dim, kernel_size=3, stride=1, padding=1)
-        out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
+        #out_dim = self.calc_out_dim(input_dim, kernel_size=3, stride=1, padding=1)
+        #out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
+        #out_dim = self.calc_out_dim(out_dim, kernel_size=3, stride=1, padding=1)
+        #out_dim = self.calc_out_dim(out_dim, kernel_size=2, stride=2, padding=0)  # maxpool
         
         # TODO: Define las capas de tu red
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * out_dim * out_dim, 128)
+        self.conv1 = nn.Conv2d(512, 256, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(256)
+        self.conv2 = nn.Conv2d(256, 128, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.conv3 = nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        
+        # Global Average Pooling para convertir features espaciales a vector
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        
+        # Capas fully connected finales
+        self.fc1 = nn.Linear(64, 128)
+        self.dropout = nn.Dropout(0.5)
         self.fc2 = nn.Linear(128, n_classes)
+        
+        # Adaptar la primera capa del backbone para recibir 1 canal (grayscale)
+        # en vez de 3 canales (RGB)
+        original_conv1 = self.backbone[0]
+        self.backbone[0] = nn.Conv2d(
+            1,  # 1 canal de entrada (grayscale)
+            original_conv1.out_channels,
+            kernel_size=original_conv1.kernel_size,
+            stride=original_conv1.stride,
+            padding=original_conv1.padding,
+            bias=False
+        )
+        # Promediar los pesos de los 3 canales RGB al 1 canal grayscale
+        with torch.no_grad():
+            self.backbone[0].weight = nn.Parameter(
+                original_conv1.weight.mean(dim=1, keepdim=True)
+           )
         
         self.to(self.device)
     
@@ -50,10 +77,14 @@ class Network(nn.Module):
     
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         # TODO: Define la propagacion hacia adelante de tu red
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
-        x = F.relu(self.fc1(x))
+        x = self.backbone(x)
+        x = F.relu((self.bn1(self.conv1(x))))
+        x = F.relu((self.bn2(self.conv2(x))))
+        x = F.relu((self.bn3(self.conv3(x))))
+        x = self.global_avg_pool(x)
+        x=x.view(x.size(0), -1)
+        x=F.relu(self.fc1(x))
+        x=self.dropout(x)
         logits = self.fc2(x)
         proba = F.softmax(logits, dim=1)
         return logits, proba
