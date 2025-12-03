@@ -49,12 +49,15 @@ def get_loader(split, batch_size, shuffle=True, num_workers=6):
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=num_workers,
+        pin_memory=True,         
+        persistent_workers=True, 
+        prefetch_factor=2        
     )
     return dataset, dataloader
 
 
 class FER2013(Dataset):
-    """`FER2013
+    """`FER2013 
     <https://www.kaggle.com/c/challenges-in-representation-learning-facial-expression-recognition-challenge>`_ Dataset.
 
     Args:
